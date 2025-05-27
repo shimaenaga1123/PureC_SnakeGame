@@ -11,16 +11,8 @@ C언어로 작성되고 완전히 한국어화된 현대적인 크로스 플랫�
   - 😐 보통: AI 중급자 (균형잡힌 플레이)
   - 😰 어려움: AI 고수 (매우 똑똑하고 예측 가능)
 
-### 🔊 완전한 오디오 시스템
-- **8가지 사운드 효과**:
-  - 🍎 사과 먹는 소리 | 💀 사망 소리 | 💥 장애물 충돌
-  - 📱 메뉴 선택 | ✅ 메뉴 확인 | 🎮 게임 시작 | ☠️ 게임 오버
-- **3가지 배경음악**: 메뉴, 게임 중, 게임 오버별 테마 음악
-- **실시간 오디오 제어**: 마스터/효과음/배경음악 개별 볼륨 조절
-
 ### ⚙️ 상세한 설정 시스템
 - **게임 설정**: 속도 조절, 격자 표시, FPS 표시, 자동 일시정지
-- **오디오 설정**: 시각적 볼륨 바와 실시간 조절
 - **게임플레이**: 화면 흔들림, 조작 방식 선택
 - **모든 설정 실시간 적용**
 
@@ -82,54 +74,8 @@ source /path/to/emsdk/emsdk_env.sh
 
 # 웹 버전 빌드
 ./build.sh --web
-
-# Cross-Origin Isolation 지원 서버로 실행 (권장)
-./run-web.sh
-```
-
-#### 수동 서버 실행
-```bash
-# Cross-Origin Isolation 지원 Python 서버
-cd build-web
-python3 ../serve.py
-
-# 또는 기본 HTTP 서버 (일부 기능 제한될 수 있음)
 python3 -m http.server 8080
 ```
-
-#### 🚨 중요: 비동기 함수 지원
-
-WebAssembly 버전에서 다음과 같은 오류가 발생할 수 있습니다:
-```
-Please compile your program with async support in order to use asynchronous operations like emscripten_sleep
-```
-
-**자동 해결**: 최신 빌드 시스템에서는 다음 플래그들이 자동으로 적용됩니다:
-- `-sASYNCIFY=1`: 비동기 함수 지원 활성화
-- `-sASYNCIFY_STACK_SIZE=32768`: 비동기 스택 크기 설정
-- `-sASYNCIFY_IGNORE_INDIRECT=1`: 간접 호출 최적화
-
-#### 🚨 중요: SharedArrayBuffer 오류 해결
-
-WebAssembly 버전에서 다음과 같은 오류가 발생할 수 있습니다:
-```
-DataCloneError: SharedArrayBuffer transfer requires self.crossOriginIsolated
-```
-
-**해결 방법:**
-1. **추천 방법**: 제공된 웹 서버 사용
-   ```bash
-   chmod +x run-web.sh serve.py  # 실행 권한 부여
-   ./run-web.sh                   # 서버 실행
-   ```
-
-2. **수동 해결**: 웹 서버에서 다음 HTTP 헤더 설정
-   ```
-   Cross-Origin-Embedder-Policy: require-corp
-   Cross-Origin-Opener-Policy: same-origin
-   ```
-
-3. **브라우저 확인**: `self.crossOriginIsolated`가 `true`인지 개발자 도구에서 확인
 
 ## 🎮 게임 방법
 
@@ -164,9 +110,6 @@ DataCloneError: SharedArrayBuffer transfer requires self.crossOriginIsolated
 ```
 SnakeGame/
 ├── src/
-│   ├── audio/              # 🆕 오디오 시스템
-│   │   ├── audio.h         # 오디오 API 정의
-│   │   └── audio.c         # 파형 생성 엔진
 │   ├── game/               # 게임 엔진
 │   │   ├── game.h/.c       # 메인 게임 로직
 │   │   └── ai.h/.c         # AI 시스템
@@ -177,7 +120,6 @@ SnakeGame/
 │   │   ├── platform_unix.c # Linux/macOS 구현
 │   │   ├── platform_windows.c # Windows 구현
 │   │   └── platform_web.c  # WebAssembly 구현
-│   ├── network/            # 네트워크 (향후 확장)
 │   └── main.c              # 메인 애플리케이션
 ├── config/
 │   └── game.conf           # 게임 설정 파일
@@ -186,22 +128,6 @@ SnakeGame/
 ├── run.sh / run.bat        # 실행 스크립트
 └── CMakeLists.txt          # CMake 설정
 ```
-
-## 🎵 오디오 시스템 상세
-
-### 구현 방식
-- **파형 생성**: 사인파, 사각파 기반 실시간 오디오 생성
-- **크로스 플랫폼**: 각 OS별 최적화된 오디오 백엔드
-- **경량화**: 외부 오디오 라이브러리 의존성 없음
-
-### 사운드 효과 상세
-| 효과음 | 주파수 | 지속시간 | 용도 |
-|--------|--------|----------|------|
-| 사과 먹기 | 800Hz | 0.2초 | 사과 획득시 |
-| 사망 | 200Hz | 0.8초 | 게임 오버시 |
-| 장애물 충돌 | 150Hz | 0.3초 | 장애물 맞을 때 |
-| 메뉴 선택 | 600Hz | 0.1초 | 메뉴 이동시 |
-| 메뉴 확인 | 900Hz | 0.15초 | 선택 확인시 |
 
 ## 🤖 AI 시스템 상세
 
@@ -229,24 +155,6 @@ SnakeGame/
 - **오류 처리**: 모든 함수에서 적절한 오류 검사
 - **문서화**: Doxygen 스타일 한국어 주석
 
-## 📄 라이선스
-
-이 프로젝트는 오픈 소스입니다. 자유롭게 사용, 수정, 배포하실 수 있습니다.
-
-## 🤝 기여하기
-
-기여를 환영합니다! 다음과 같은 방법으로 참여하실 수 있습니다:
-
-1. **버그 리포트**: 이슈 탭에서 버그를 신고해주세요
-2. **기능 제안**: 새로운 기능에 대한 아이디어를 제안해주세요
-3. **코드 기여**: Pull Request를 통해 코드를 기여해주세요
-4. **문서 개선**: 문서의 오타나 설명 개선사항을 알려주세요
-
-## 💬 문의
-
-- 게임 관련 문의: GitHub Issues
-- 기술적 질문: GitHub Discussions
-- 기타 문의: 프로젝트 메인테이너에게 연락
 
 ---
 

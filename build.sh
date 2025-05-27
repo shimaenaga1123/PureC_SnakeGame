@@ -102,8 +102,6 @@ if [[ "${PLATFORM}" == "web" ]]; then
 
     print_success "WebAssembly 빌드 완료!"
     print_status "${BUILD_DIR}/snake.html을 웹 브라우저에서 열어 플레이하세요"
-    print_status "Cross-Origin Isolation을 위해 적절한 웹 서버 사용을 권장합니다:"
-    print_status "  ./run-web.sh 또는 python3 ../serve.py"
     
 else
     # 네이티브 빌드
