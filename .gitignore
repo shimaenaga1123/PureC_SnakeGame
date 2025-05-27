@@ -1,0 +1,69 @@
+# Build directories
+build/
+build-*/
+bin/
+obj/
+cmake-build-debug/
+
+# Compiled executables
+*.exe
+*.out
+snake
+snake.exe
+
+# Object files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+
+# Debug files
+*.pdb
+*.ilk
+
+# IDE files
+.vs/
+.vscode/
+*.vcxproj*
+*.sln
+*.suo
+*.user
+*.swp
+*.swo
+*~
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+!build.sh
+
+# Emscripten files
+*.wasm
+*.js
+*.html
+!web/shell.html
+
+# macOS
+.DS_Store
+*.dSYM/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Package files
+*.tar.gz
+*.zip
+*.rar
+
+# Editor backup files
+.#*
+#*#
+.idea/
+

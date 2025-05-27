@@ -1,0 +1,5 @@
+message(STATUS "포함된 기능:")
+message(STATUS "  - 게임 엔진: ✓")
+message(STATUS "  - AI 시스템: ✓")
+message(STATUS "  - UI 시스템: ✓")
+message(STATUS "  - 크로스 플랫폼 지원: ✓")

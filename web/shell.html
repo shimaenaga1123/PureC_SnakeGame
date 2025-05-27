@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cross-Platform Snake Game</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #00ff00;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+            margin-bottom: 20px;
+        }
+
+        .game-area {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        canvas {
+            border: 2px solid #00ff00;
+            background-color: #000;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #00ff00;
+            background-color: rgba(0, 255, 0, 0.1);
+        }
+
+        .controls h3 {
+            margin-top: 0;
+        }
+
+        .output {
+            width: 100%;
+            height: 400px;
+            background-color: #000;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 10px;
+            border: 1px solid #00ff00;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .spinner {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .progress {
+            width: 100%;
+            height: 20px;
+            border: 1px solid #00ff00;
+            background-color: #000;
+            margin: 10px 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: #00ff00;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        #status {
+            text-align: center;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐍 Cross-Platform Snake Game 🐍</h1>
+        
+        <div id="status">Loading...</div>
+        <div class="progress">
+            <div class="progress-bar" id="progress"></div>
+        </div>
+        
+        <div class="game-area">
+            <canvas id="gameCanvas" width="800" height="600"></canvas>
+        </div>
+        
+        <div class="controls">
+            <h3>Controls</h3>
+            <p><strong>Single Player:</strong> Arrow keys or WASD to move</p>
+            <p><strong>Multi Player:</strong> Player 1 uses Arrow/WASD, Player 2 uses 1234</p>
+            <p><strong>Menu:</strong> Enter to select, ESC to go back</p>
+        </div>
+        
+        <div id="output" class="output"></div>
+    </div>
+
+    <script type='text/javascript'>
+        var statusElement = document.getElementById('status');
+        var progressElement = document.getElementById('progress');
+        var outputElement = document.getElementById('output');
+        
+        var Module = {
+            preRun: [],
+            postRun: [],
+            canvas: document.getElementById('gameCanvas'),
+            print: function(text) {
+                outputElement.textContent += text + '\n';
+                outputElement.scrollTop = outputElement.scrollHeight;
+            },
+            printErr: function(text) {
+                outputElement.textContent += 'ERROR: ' + text + '\n';
+                outputElement.scrollTop = outputElement.scrollHeight;
+            },
+            setStatus: function(text) {
+                if (!Module.setStatus.last) Module.setStatus.last = { time: Date.now(), text: '' };
+                if (text === Module.setStatus.last.text) return;
+                var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+                var now = Date.now();
+                if (m && now - Module.setStatus.last.time < 30) return;
+                Module.setStatus.last.time = now;
+                Module.setStatus.last.text = text;
+                statusElement.innerHTML = text;
+                
+                if (m) {
+                    var progress = parseInt(m[2]) / parseInt(m[4]) * 100;
+                    progressElement.style.width = progress + '%';
+                }
+            },
+            totalDependencies: 0,
+            monitorRunDependencies: function(left) {
+                this.totalDependencies = Math.max(this.totalDependencies, left);
+                Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+            }
+        };
+        
+        Module.setStatus('Downloading...');
+        window.onerror = function() {
+            Module.setStatus('Exception thrown, see JavaScript console');
+            statusElement.style.color = 'red';
+            Module.setStatus = function(text) {
+                if (text) statusElement.innerHTML = text;
+            };
+        };
+        
+        // Clear console function for the game
+        function clearConsole() {
+            outputElement.textContent = '';
+        }
+        
+        // Make clearConsole available globally
+        window.clearConsole = clearConsole;
+    </script>
+    {{{ SCRIPT }}}
+</body>
+</html>
