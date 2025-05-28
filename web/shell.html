@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
 
@@ -30,6 +31,7 @@
             color: #00ff00;
             text-shadow: 0 0 10px #00ff00;
             margin-bottom: 20px;
+            font-size: 24px;
         }
 
         .game-area {
@@ -38,104 +40,191 @@
             margin-bottom: 20px;
         }
 
-        canvas {
-            border: 2px solid #00ff00;
-            background-color: #000;
-            image-rendering: pixelated;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
-        }
-
         .controls {
             text-align: center;
             margin: 20px 0;
-            padding: 20px;
+            padding: 15px;
             border: 1px solid #00ff00;
             background-color: rgba(0, 255, 0, 0.1);
+            border-radius: 5px;
         }
 
         .controls h3 {
             margin-top: 0;
+            color: #00ff00;
+        }
+
+        .controls p {
+            margin: 5px 0;
+            font-size: 14px;
         }
 
         .output {
             width: 100%;
-            height: 400px;
+            min-height: 600px;
             background-color: #000;
             color: #00ff00;
-            font-family: 'Courier New', monospace;
+            font-family: 'Courier New', 'DejaVu Sans Mono', monospace;
             font-size: 12px;
+            line-height: 1.2;
             padding: 10px;
-            border: 1px solid #00ff00;
+            border: 2px solid #00ff00;
             overflow-y: auto;
-            white-space: pre-wrap;
+            white-space: pre;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            /* UTF-8 문자 렌더링 개선 */
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
-        .spinner {
+        .status-area {
             text-align: center;
-            margin: 20px 0;
+            margin-bottom: 20px;
         }
 
         .progress {
-            width: 100%;
+            width: 300px;
             height: 20px;
             border: 1px solid #00ff00;
             background-color: #000;
-            margin: 10px 0;
+            margin: 10px auto;
+            border-radius: 3px;
+            overflow: hidden;
         }
 
         .progress-bar {
             height: 100%;
-            background-color: #00ff00;
+            background: linear-gradient(90deg, #00ff00, #00aa00);
             width: 0%;
             transition: width 0.3s ease;
         }
 
         #status {
-            text-align: center;
+            color: #00ff00;
+            font-weight: bold;
             margin: 10px 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .error {
+            color: #ff0000 !important;
+            background-color: rgba(255, 0, 0, 0.1);
+            padding: 10px;
+            border: 1px solid #ff0000;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        /* 키보드 포커스를 위한 스타일 */
+        body:focus {
+            outline: none;
+        }
+
+        /* 게임이 시작되면 컨트롤 가이드 강조 */
+        .game-active .controls {
+            border-color: #ffff00;
+            background-color: rgba(255, 255, 0, 0.1);
+        }
+
+        /* 한글 및 특수문자 지원 */
+        .output * {
+            font-family: 'Courier New', 'DejaVu Sans Mono', 'Noto Sans CJK KR', 'Malgun Gothic', sans-serif;
         }
     </style>
 </head>
-<body>
+<body tabindex="0">
     <div class="container">
-        <h1>🐍 Cross-Platform Snake Game 🐍</h1>
+        <h1>🐍 크로스 플랫폼 뱀 게임 🐍</h1>
         
-        <div id="status">Loading...</div>
-        <div class="progress">
-            <div class="progress-bar" id="progress"></div>
-        </div>
-        
-        <div class="game-area">
-            <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div class="status-area">
+            <div id="status">로딩 중...</div>
+            <div class="progress">
+                <div class="progress-bar" id="progress"></div>
+            </div>
         </div>
         
         <div class="controls">
-            <h3>Controls</h3>
-            <p><strong>Single Player:</strong> Arrow keys or WASD to move</p>
-            <p><strong>Multi Player:</strong> Player 1 uses Arrow/WASD, Player 2 uses 1234</p>
-            <p><strong>Menu:</strong> Enter to select, ESC to go back</p>
+            <h3>🎮 게임 조작법</h3>
+            <p><strong>이동:</strong> 화살표 키 (↑↓←→) 또는 WASD</p>
+            <p><strong>메뉴 조작:</strong> 화살표로 이동, Enter로 선택, ESC로 뒤로가기</p>
+            <p><strong>게임 중:</strong> SPACE로 일시정지, ESC로 메뉴 복귀</p>
+            <p><strong>설정 변경:</strong> 좌우 화살표로 게임 속도 및 AI 특성 조정</p>
         </div>
         
-        <div id="output" class="output"></div>
+        <div class="game-area">
+            <div id="output" class="output">
+                게임을 로딩하는 중입니다...
+            </div>
+        </div>
     </div>
 
     <script type='text/javascript'>
         var statusElement = document.getElementById('status');
         var progressElement = document.getElementById('progress');
         var outputElement = document.getElementById('output');
+        var gameStarted = false;
+        
+        // UTF-8 문자 처리를 위한 설정
+        document.characterSet = 'UTF-8';
+        
+        // 키보드 포커스 설정
+        document.body.focus();
+        
+        // 키보드 이벤트가 확실히 전달되도록 설정
+        document.addEventListener('keydown', function(e) {
+            // 게임 관련 키들의 기본 동작 방지
+            if ([37, 38, 39, 40, 32, 27, 13].includes(e.keyCode)) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
         
         var Module = {
             preRun: [],
-            postRun: [],
-            canvas: document.getElementById('gameCanvas'),
+            postRun: [function() {
+                statusElement.innerHTML = '🎮 게임 시작! 키보드로 조작하세요.';
+                progressElement.style.width = '100%';
+                setTimeout(function() {
+                    document.querySelector('.status-area').style.display = 'none';
+                    document.body.classList.add('game-active');
+                    outputElement.innerHTML = '🐍 게임을 시작합니다...\n메뉴에서 게임 모드를 선택하세요.\n\n⌨️  화살표 키나 WASD로 이동\n🎯 Enter로 선택, ESC로 뒤로가기';
+                    gameStarted = true;
+                    document.body.focus();
+                    outputElement.focus();
+                }, 1000);
+            }],
             print: function(text) {
-                outputElement.textContent += text + '\n';
-                outputElement.scrollTop = outputElement.scrollHeight;
+                // UTF-8 문자를 올바르게 처리
+                try {
+                    var utf8Text = decodeURIComponent(escape(text));
+                    if (gameStarted) {
+                        // 게임 시작 후에는 console.log만 사용
+                        console.log('Game:', utf8Text);
+                    } else {
+                        // 로딩 중에는 출력 영역에 표시
+                        outputElement.textContent += utf8Text + '\n';
+                        outputElement.scrollTop = outputElement.scrollHeight;
+                    }
+                } catch (e) {
+                    // UTF-8 디코딩 실패시 원본 텍스트 사용
+                    if (gameStarted) {
+                        console.log('Game:', text);
+                    } else {
+                        outputElement.textContent += text + '\n';
+                        outputElement.scrollTop = outputElement.scrollHeight;
+                    }
+                }
             },
             printErr: function(text) {
-                outputElement.textContent += 'ERROR: ' + text + '\n';
-                outputElement.scrollTop = outputElement.scrollHeight;
+                console.error('Game Error:', text);
+                if (!gameStarted) {
+                    outputElement.innerHTML += '<div class="error">❌ 오류: ' + text + '</div>';
+                    outputElement.scrollTop = outputElement.scrollHeight;
+                }
             },
             setStatus: function(text) {
                 if (!Module.setStatus.last) Module.setStatus.last = { time: Date.now(), text: '' };
@@ -150,31 +239,62 @@
                 if (m) {
                     var progress = parseInt(m[2]) / parseInt(m[4]) * 100;
                     progressElement.style.width = progress + '%';
+                } else if (text.includes('완료') || text.includes('complete')) {
+                    progressElement.style.width = '100%';
                 }
             },
             totalDependencies: 0,
             monitorRunDependencies: function(left) {
                 this.totalDependencies = Math.max(this.totalDependencies, left);
-                Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+                var message = left ? 
+                    '준비 중... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 
+                    '모든 다운로드 완료';
+                Module.setStatus(message);
+            },
+            onRuntimeInitialized: function() {
+                console.log('WebAssembly 런타임 초기화 완료');
+                statusElement.innerHTML = '🔧 게임 초기화 중...';
             }
         };
         
-        Module.setStatus('Downloading...');
-        window.onerror = function() {
-            Module.setStatus('Exception thrown, see JavaScript console');
+        Module.setStatus('📥 다운로드 중...');
+        
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            var errorMsg = '예외 발생: ' + msg;
+            Module.setStatus(errorMsg);
             statusElement.style.color = 'red';
-            Module.setStatus = function(text) {
-                if (text) statusElement.innerHTML = text;
-            };
+            statusElement.className = 'error';
+            console.error('Window Error:', error);
+            return false;
         };
         
-        // Clear console function for the game
-        function clearConsole() {
-            outputElement.textContent = '';
-        }
+        // 게임용 전역 함수들
+        window.clearConsole = function() {
+            if (outputElement) {
+                outputElement.textContent = '';
+            }
+        };
         
-        // Make clearConsole available globally
-        window.clearConsole = clearConsole;
+        // 게임 화면 업데이트 함수 (C 코드에서 호출됨)
+        window.updateGameScreen = function(screenData) {
+            if (outputElement && gameStarted) {
+                outputElement.innerHTML = screenData;
+            }
+        };
+        
+        // UTF-8 텍스트 처리 헬퍼 함수
+        window.setUTF8Text = function(text) {
+            if (outputElement) {
+                outputElement.innerHTML = text;
+            }
+        };
+        
+        // 페이지 언로드 시 게임 정리
+        window.addEventListener('beforeunload', function() {
+            if (Module && Module._main) {
+                console.log('게임 정리 중...');
+            }
+        });
     </script>
     {{{ SCRIPT }}}
 </body>

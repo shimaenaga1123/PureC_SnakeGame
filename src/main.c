@@ -5,8 +5,15 @@
 #include "game/game.h"
 #include "ui/ui.h"
 
+#ifdef PLATFORM_WEB
+#include <emscripten.h>
+#endif
+
 // 외부 AI 함수 선언
 void ai_update_players(game_state_t* game, int ai_personality);
+
+// 함수 전방 선언
+void start_game(game_mode_t mode);
 
 /**
  * @brief 애플리케이션의 전체 상태를 나타내는 구조체
@@ -23,6 +30,97 @@ typedef struct {
 } app_state_t;
 
 static app_state_t g_app;
+
+#ifdef PLATFORM_WEB
+/**
+ * @brief 웹용 메인 루프 함수 (Emscripten 콜백)
+ */
+void web_main_loop(void) {
+    static int loop_count = 0;
+    loop_count++;
+    
+    if (!g_app.running) {
+        printf("애플리케이션 종료 중...\n");
+        emscripten_cancel_main_loop();
+        return;
+    }
+    
+    // 5초마다 상태 로그 출력 (디버깅용)
+    if (loop_count % 300 == 0) {  // 60 FPS * 5초
+        printf("메인 루프 실행 중... (루프 %d회, 게임 중: %s)\n", 
+               loop_count, g_app.in_game ? "예" : "아니오");
+    }
+    
+    if (!g_app.in_game) {
+        // UI 처리
+        ui_render(&g_app.ui);
+        
+        game_key_t key = platform_get_key_pressed();
+        if (key != KEY_NONE) {
+            // ESC 키로 메인 메뉴로 돌아가기
+            if (key == KEY_ESC && g_app.ui.current_state != UI_STATE_MAIN_MENU) {
+                ui_set_state(&g_app.ui, UI_STATE_MAIN_MENU);
+            } else {
+                ui_handle_input(&g_app.ui, key);
+                
+                // 게임 시작 확인
+                if (g_app.ui.current_state == UI_STATE_PLAYING) {
+                    printf("게임 시작...\n");
+                    start_game(g_app.ui.selected_mode);
+                }
+                
+                // 종료 확인
+                if (g_app.ui.current_state == UI_STATE_MAIN_MENU && 
+                    g_app.ui.selected_option == 3 && key == KEY_ENTER) {
+                    printf("사용자가 종료를 선택했습니다.\n");
+                    g_app.running = false;
+                }
+            }
+        }
+    } else {
+        // 게임 루프 처리
+        uint64_t current_time = platform_get_time_ms();
+        
+        game_key_t key = platform_get_key_pressed();
+        
+        // ESC 키로 게임 종료
+        if (key == KEY_ESC) {
+            printf("게임에서 메뉴로 복귀\n");
+            g_app.in_game = false;
+            ui_set_state(&g_app.ui, UI_STATE_MAIN_MENU);
+            platform_clear_screen();
+            return;
+        }
+        
+        // 사용자 입력 처리
+        if (key != KEY_NONE) {
+            game_handle_input(&g_app.game, 0, key);
+        }
+        
+        // AI 플레이어 업데이트 - 100ms마다
+        if (current_time - g_app.last_ai_update_time >= 100) {
+            ai_update_players(&g_app.game, g_app.ui.ai_personality);
+            g_app.last_ai_update_time = current_time;
+        }
+        
+        // 게임 상태 업데이트 - 게임 속도에 따라
+        if (current_time - g_app.last_update_time >= (uint64_t)g_app.game.game_speed) {
+            if (!game_update(&g_app.game)) {
+                printf("게임 오버\n");
+                g_app.in_game = false;
+                platform_clear_screen();
+                ui_set_state(&g_app.ui, UI_STATE_GAME_OVER);
+                ui_show_game_over(&g_app.ui, &g_app.game);
+                return;
+            }
+            g_app.last_update_time = current_time;
+        }
+        
+        // 게임 렌더링
+        game_render(&g_app.game);
+    }
+}
+#endif
 
 /**
  * @brief 게임 루프를 실행하는 스레드 함수
@@ -97,11 +195,11 @@ void start_game(game_mode_t mode) {
     g_app.last_ai_update_time = g_app.last_update_time;
     
 #ifdef PLATFORM_WEB
-    // WebAssembly 빌드에서는 스레드를 사용하지 않고 메인 루프에서 처리
+    // 웹에서는 메인 루프에서 모든 것을 처리
+    platform_clear_screen();
 #else
-    // 게임 스레드 생성
+    // 네이티브 플랫폼: 게임 스레드 생성
     thread_handle_t game_thread_handle = platform_create_thread(game_thread, &g_app);
-#endif
 
     // 입력 처리 루프
     while (g_app.running && g_app.in_game) {
@@ -111,48 +209,17 @@ void start_game(game_mode_t mode) {
         if (key == KEY_ESC) {
             g_app.in_game = false;
             ui_set_state(&g_app.ui, UI_STATE_MAIN_MENU);
-            // 게임 종료 시 화면 완전 정리
             platform_clear_screen();
             break;
         }
 
         // 사용자 입력 처리 (플레이어 0만)
         game_handle_input(&g_app.game, 0, key);
-
-#ifdef PLATFORM_WEB
-        // WebAssembly 빌드에서는 이 곳에서 게임 루프 처리
-        uint64_t current_time = platform_get_time_ms();
-
-        // AI 플레이어 업데이트 - 100ms마다 실행
-        if (current_time - g_app.last_ai_update_time >= 100) {
-            ai_update_players(&g_app.game, g_app.ui.ai_personality);
-            g_app.last_ai_update_time = current_time;
-        }
-
-        // 게임 상태 업데이트 - 게임 속도에 따라 실행
-        if (current_time - g_app.last_update_time >= (uint64_t)g_app.game.game_speed) {
-            if (!game_update(&g_app.game)) {
-                g_app.in_game = false;
-                // 게임 오버 시 화면 완전 정리
-                platform_clear_screen();
-                ui_set_state(&g_app.ui, UI_STATE_GAME_OVER);
-                ui_show_game_over(&g_app.ui, &g_app.game);
-                break;
-            }
-            g_app.last_update_time = current_time;
-        }
-
-        // 게임 렌더링
-        game_render(&g_app.game);
-#endif
-
         platform_sleep(16);
     }
 
-#ifndef PLATFORM_WEB
     // 게임 스레드가 끝날 때까지 대기
     platform_join_thread(game_thread_handle);
-#endif
 
     // 게임 종료 시 화면 완전 정리
     if (!g_app.in_game) {
@@ -160,6 +227,7 @@ void start_game(game_mode_t mode) {
     }
 
     game_cleanup(&g_app.game);
+#endif
 }
 
 /**
@@ -185,7 +253,15 @@ int main(void) {
     platform_hide_cursor();
     platform_set_console_size(120, 50);
     
-    // 메인 애플리케이션 루프
+#ifdef PLATFORM_WEB
+    // 웹 플랫폼: Emscripten 메인 루프 사용
+    printf("크로스 플랫폼 뱀 게임을 시작합니다...\n");
+    emscripten_set_main_loop(web_main_loop, 60, 1);
+    
+    // 웹에서는 여기까지 도달하지 않음 (무한 루프)
+    return 0;
+#else
+    // 네이티브 플랫폼: 기존 메인 루프
     while (g_app.running) {
         if (!g_app.in_game) {
             // UI 처리
@@ -224,4 +300,5 @@ int main(void) {
     
     printf("게임을 종료합니다. 플레이해주셔서 감사합니다!\n");
     return 0;
+#endif
 }

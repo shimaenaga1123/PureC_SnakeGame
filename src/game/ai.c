@@ -228,7 +228,7 @@ direction_t ai_get_best_move(game_state_t* game, int snake_id, int ai_personalit
     if (params.risk_tolerance > 1.0f) params.risk_tolerance = 1.0f;
     
     // 무작위성 추가 - 설정된 확률로 무작위 움직임
-    if ((float)rand() / RAND_MAX < params.randomness) {
+    if ((float)rand() / (float)RAND_MAX < params.randomness) {
         direction_t random_dirs[4];
         int valid_count = 0;
         

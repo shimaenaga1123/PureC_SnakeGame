@@ -97,31 +97,34 @@ elseif(EMSCRIPTEN)
     set_target_properties(snake PROPERTIES
         SUFFIX ".html"
     )
-    # 컴파일 옵션 추가 (스레드 사용 안함)
+    
+    # 컴파일 옵션 추가
     target_compile_options(snake PRIVATE
         "-sASYNCIFY=1"
-        # WebAssembly 빌드에서 스레드 비활성화
-        # "-sUSE_PTHREADS=1"
+        "-finput-charset=UTF-8"
+        "-fexec-charset=UTF-8"
     )
+    
+    # 링크 옵션 추가
     target_link_options(snake PRIVATE
-        # WebAssembly 빌드에서 스레드 비활성화
-        # "-sUSE_PTHREADS=1"
-        # "-sPTHREAD_POOL_SIZE=4"
-        # "-sWASM_WORKERS=1"
-        # "-sSHARED_MEMORY=1"
         "-sASYNCIFY=1"
         "-sASYNCIFY_STACK_SIZE=32768"
-        "-sASYNCIFY_IGNORE_INDIRECT=1"
-        "-sASYNCIFY_IMPORTS=['emscripten_sleep','emscripten_wget','emscripten_wget_data']"
         "--shell-file=${CMAKE_SOURCE_DIR}/web/shell.html"
         "-sALLOW_MEMORY_GROWTH=1"
         "-sINITIAL_MEMORY=33554432"
-        "-sUSE_SDL=2"
-        "-sENVIRONMENT=web,worker"
-        "-sOFFSCREEN_FRAMEBUFFER=1"
-        "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
+        "-sSTACK_SIZE=2097152"
+        "-sENVIRONMENT=web"
+        "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString']"
         "-sEXPORTED_FUNCTIONS=['_main']"
         "-sMODULARIZE=0"
+        "-sINVOKE_RUN=1"
+        "-sNO_EXIT_RUNTIME=1"
+        "-sSAFE_HEAP=1"
+        "-sASSERTIONS=1"
+        "-sSTACK_OVERFLOW_CHECK=2"
+        "-sABORTING_MALLOC=0"
+        "-sUSE_CLOSURE_COMPILER=0"
+        "-sWASM_BIGINT=0"
     )
 elseif(UNIX AND NOT APPLE)
     # Linux: pthread 라이브러리와 동적 링크 라이브러리
