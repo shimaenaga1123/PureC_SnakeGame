@@ -1,6 +1,5 @@
 #include "game.h"
 #include "ai.h"
-#include "../config/config.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -164,13 +163,6 @@ bool game_init(game_state_t* game, game_mode_t mode) {
     game->apples_eaten = 0;
     game->actual_play_time = 0;
     
-    // 설정에서 부드러운 모션 설정 로드
-    game_config_t config;
-    config_set_defaults(&config);
-    if (config_load(&config)) {
-        game->smooth_motion_enabled = config.smooth_motion;
-    }
-    
     // 모드에 따른 플레이어 초기화
     switch (mode) {
         case GAME_MODE_SINGLE:
@@ -316,19 +308,7 @@ void game_update_statistics(game_state_t* game) {
     
     game->actual_play_time = game_get_play_time(game);
     
-    // 설정 파일에 통계 저장
-    game_config_t config;
-    config_set_defaults(&config);
-    config_load(&config);
-    
-    config.total_play_time = game->actual_play_time / 1000; // 초 단위로 저장
-    config.total_apples_eaten = game->apples_eaten;
-    
-    if (game->num_players > 0 && game->players[0].score > config.best_score) {
-        config.best_score = game->players[0].score;
-    }
-    
-    config_save(&config);
+    // 메모리에서만 통계 유지 (파일 저장 안함)
 }
 
 /**

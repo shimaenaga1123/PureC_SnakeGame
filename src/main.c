@@ -6,7 +6,7 @@
 #include "ui/ui.h"
 
 // 외부 AI 함수 선언
-void ai_update_players(game_state_t* game);
+void ai_update_players(game_state_t* game, int ai_personality);
 
 /**
  * @brief 애플리케이션의 전체 상태를 나타내는 구조체
@@ -40,7 +40,7 @@ void* game_thread(void* arg) {
         
         // AI 플레이어 업데이트 - 100ms마다 실행
         if (current_time - app->last_ai_update_time >= 100) {
-            ai_update_players(&app->game);
+            ai_update_players(&app->game, app->ui.ai_personality);
             app->last_ai_update_time = current_time;
         }
         
@@ -125,7 +125,7 @@ void start_game(game_mode_t mode) {
 
         // AI 플레이어 업데이트 - 100ms마다 실행
         if (current_time - g_app.last_ai_update_time >= 100) {
-            ai_update_players(&g_app.game);
+            ai_update_players(&g_app.game, g_app.ui.ai_personality);
             g_app.last_ai_update_time = current_time;
         }
 

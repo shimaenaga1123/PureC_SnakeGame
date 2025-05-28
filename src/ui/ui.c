@@ -16,7 +16,6 @@ static bool g_ui_initialized = false;
 static void ui_handle_main_menu_selection(ui_context_t* ui);
 static void ui_handle_ai_difficulty_selection(ui_context_t* ui);
 static void ui_handle_game_over_selection(ui_context_t* ui);
-static void ui_handle_settings_selection(ui_context_t* ui);
 
 /**
  * @brief UI 시스템을 초기화합니다
@@ -32,14 +31,7 @@ void ui_init(ui_context_t* ui) {
     
     // 기본 게임 설정값으로 초기화
     ui->game_speed_setting = 1;    // 보통
-    ui->game_difficulty = 1;       // 보통
-    ui->show_grid = false;
-    ui->show_fps = false;
-    
-    // 기본 게임플레이 설정값
-    ui->auto_pause = false;
-    ui->screen_shake = true;
-    ui->controls_scheme = 0;       // 화살표+WASD
+    ui->ai_personality = 0;        // 균형잡힌
     
     // UI 추적 변수 초기화
     g_ui_initialized = false;
@@ -227,6 +219,9 @@ void ui_render(ui_context_t* ui) {
     if (force_full_redraw) {
         platform_set_color(COLOR_BRIGHT_BLACK);
         platform_print_at(20, 29, "화살표 키로 이동, Enter로 선택, ESC로 뒤로가기");
+        if (ui->current_state == UI_STATE_MAIN_MENU || ui->current_state == UI_STATE_AI_DIFFICULTY_SELECT) {
+            platform_print_at(20, 30, "좌우 화살표로 설정 변경");
+        }
     }
 
     platform_reset_color();
@@ -264,16 +259,28 @@ void ui_handle_input(ui_context_t* ui, game_key_t key) {
             break;
             
         case KEY_LEFT:
-            // 왼쪽 키 처리 (설정에서 값 변경)
-            if (ui->current_state == UI_STATE_SETTINGS) {
-                ui_handle_settings_selection(ui);
+            // 왼쪽 키 처리 (설정 변경)
+            if (ui->current_state == UI_STATE_MAIN_MENU && ui->selected_option == 1) {
+                // 게임 속도 변경
+                ui->game_speed_setting = (ui->game_speed_setting == 0) ? 2 : ui->game_speed_setting - 1;
+                ui_show_main_menu(ui);
+            } else if (ui->current_state == UI_STATE_AI_DIFFICULTY_SELECT && ui->selected_option == 3) {
+                // AI 특성 변경
+                ui->ai_personality = (ui->ai_personality == 0) ? 4 : ui->ai_personality - 1;
+                ui_show_ai_difficulty_select(ui);
             }
             break;
 
         case KEY_RIGHT:
-            // 오른쪽 키 처리 (설정에서 값 변경)
-            if (ui->current_state == UI_STATE_SETTINGS) {
-                ui_handle_settings_selection(ui);
+            // 오른쪽 키 처리 (설정 변경)
+            if (ui->current_state == UI_STATE_MAIN_MENU && ui->selected_option == 1) {
+                // 게임 속도 변경
+                ui->game_speed_setting = (ui->game_speed_setting + 1) % 3;
+                ui_show_main_menu(ui);
+            } else if (ui->current_state == UI_STATE_AI_DIFFICULTY_SELECT && ui->selected_option == 3) {
+                // AI 특성 변경
+                ui->ai_personality = (ui->ai_personality + 1) % 5;
+                ui_show_ai_difficulty_select(ui);
             }
             break;
             
@@ -290,10 +297,6 @@ void ui_handle_input(ui_context_t* ui, game_key_t key) {
                     
                 case UI_STATE_GAME_OVER:
                     ui_handle_game_over_selection(ui);
-                    break;
-                    
-                case UI_STATE_SETTINGS:
-                    ui_handle_settings_selection(ui);
                     break;
                     
                 default:
@@ -318,11 +321,11 @@ static void ui_handle_main_menu_selection(ui_context_t* ui) {
             ui->selected_mode = GAME_MODE_SINGLE;
             ui_set_state(ui, UI_STATE_PLAYING);
             break;
-        case 1: // AI와 대전
-            ui_set_state(ui, UI_STATE_AI_DIFFICULTY_SELECT);
+        case 1: // 게임 속도 설정 (좌우 화살표로 변경)
+            // Enter는 무시, 좌우 화살표로만 변경
             break;
-        case 2: // 설정
-            ui_set_state(ui, UI_STATE_SETTINGS);
+        case 2: // AI와 대전
+            ui_set_state(ui, UI_STATE_AI_DIFFICULTY_SELECT);
             break;
         case 3: // 종료
             // 게임 종료 신호
@@ -349,7 +352,10 @@ static void ui_handle_ai_difficulty_selection(ui_context_t* ui) {
             ui->selected_mode = GAME_MODE_VS_AI_HARD;
             ui_set_state(ui, UI_STATE_PLAYING);
             break;
-        case 3: // 뒤로가기
+        case 3: // AI 특성 설정 (좌우 화살표로 변경)
+            // Enter는 무시, 좌우 화살표로만 변경
+            break;
+        case 4: // 뒤로가기
             ui_set_state(ui, UI_STATE_MAIN_MENU);
             break;
     }
@@ -370,44 +376,6 @@ static void ui_handle_game_over_selection(ui_context_t* ui) {
             break;
     }
 }
-
-/**
- * @brief 설정 메뉴 선택을 처리합니다
- * 
- * @param ui UI 컨텍스트 포인터
- */
-static void ui_handle_settings_selection(ui_context_t* ui) {
-    switch (ui->selected_option) {
-        case 0: // 게임 속도
-            ui->game_speed_setting = (ui->game_speed_setting + 1) % 3;
-            ui_show_settings(ui);
-            break;
-        case 1: // 격자 표시
-            ui->show_grid = !ui->show_grid;
-            ui_show_settings(ui);
-            break;
-        case 2: // FPS 표시
-            ui->show_fps = !ui->show_fps;
-            ui_show_settings(ui);
-            break;
-        case 3: // 자동 일시정지
-            ui->auto_pause = !ui->auto_pause;
-            ui_show_settings(ui);
-            break;
-        case 4: // 화면 흔들림
-            ui->screen_shake = !ui->screen_shake;
-            ui_show_settings(ui);
-            break;
-        case 5: // 조작 방식
-            ui->controls_scheme = (ui->controls_scheme + 1) % 3;
-            ui_show_settings(ui);
-            break;
-        case 6: // 메인 메뉴로 돌아가기
-            ui_set_state(ui, UI_STATE_MAIN_MENU);
-            break;
-    }
-}
-
 
 /**
  * @brief UI 상태를 변경합니다
@@ -444,9 +412,6 @@ void ui_set_state(ui_context_t* ui, ui_state_t state) {
         case UI_STATE_AI_DIFFICULTY_SELECT:
             ui_show_ai_difficulty_select(ui);
             break;
-        case UI_STATE_SETTINGS:
-            ui_show_settings(ui);
-            break;
         default:
             break;
     }
@@ -465,8 +430,13 @@ void ui_show_main_menu(ui_context_t* ui) {
     
     ui->num_options = 4;
     strcpy(ui->options[0].text, "🎯 혼자서 도전 (점수 도전 모드)");
-    strcpy(ui->options[1].text, "🤖 AI와 대전 (생존 배틀 모드)");
-    strcpy(ui->options[2].text, "⚙️  설정");
+    
+    // 게임 속도 옵션 (좌우 화살표로 변경 가능)
+    const char* speed_names[] = {"느림", "보통", "빠름"};
+    snprintf(ui->options[1].text, sizeof(ui->options[1].text), 
+             "⚡ 게임 속도: %s ← →", speed_names[ui->game_speed_setting]);
+    
+    strcpy(ui->options[2].text, "🤖 AI와 대전 (생존 배틀 모드)");
     strcpy(ui->options[3].text, "🚪 종료");
     
     ui->options[0].value = 0;
@@ -483,22 +453,30 @@ void ui_show_main_menu(ui_context_t* ui) {
 void ui_show_ai_difficulty_select(ui_context_t* ui) {
     if (!ui) return;
     
-    strcpy(ui->title, "🤖 AI 난이도 선택");
+    strcpy(ui->title, "🤖 AI 난이도 및 특성 선택");
     strcpy(ui->message, "AI와의 대전에서 승리하세요!\n\n"
                        "• 쉬움: AI가 실수를 자주 합니다\n"
                        "• 보통: 균형잡힌 AI와 대전합니다\n"
-                       "• 어려움: 매우 똑똑한 AI와 대전합니다");
+                       "• 어려움: 매우 똑똑한 AI와 대전합니다\n\n"
+                       "AI 특성을 선택하여 플레이 스타일을 변경할 수 있습니다.");
     
-    ui->num_options = 4;
+    ui->num_options = 5;
     strcpy(ui->options[0].text, "😊 쉬움 - AI 초보자");
     strcpy(ui->options[1].text, "😐 보통 - AI 중급자");
     strcpy(ui->options[2].text, "😰 어려움 - AI 고수");
-    strcpy(ui->options[3].text, "⬅️ 뒤로가기");
+    
+    // AI 특성 옵션 (좌우 화살표로 변경 가능)
+    const char* personality_names[] = {"균형잡힌", "공격적", "방어적", "신중한", "무모한"};
+    snprintf(ui->options[3].text, sizeof(ui->options[3].text),
+             "🎭 AI 특성: %s ← →", personality_names[ui->ai_personality]);
+    
+    strcpy(ui->options[4].text, "⬅️ 뒤로가기");
     
     ui->options[0].value = GAME_MODE_VS_AI_EASY;
     ui->options[1].value = GAME_MODE_VS_AI_MEDIUM;
     ui->options[2].value = GAME_MODE_VS_AI_HARD;
     ui->options[3].value = -1;
+    ui->options[4].value = -1;
 }
 
 /**
@@ -583,34 +561,4 @@ void ui_show_game_over(ui_context_t* ui, game_state_t* game) {
     
     ui->options[0].value = 0;
     ui->options[1].value = 1;
-}
-
-/**
- * @brief 설정 화면을 표시합니다
- * 
- * @param ui UI 컨텍스트 포인터
- */
-void ui_show_settings(ui_context_t* ui) {
-    if (!ui) return;
-    
-    strcpy(ui->title, "⚙️게임 설정");
-    strcpy(ui->message, "");
-    
-    ui->num_options = 7;
-
-    // 게임 속도 옵션
-    const char* speed_names[] = {"느림", "보통", "빠름"};
-    snprintf(ui->options[0].text, sizeof(ui->options[0].text), 
-             "🏃 게임 속도: %s", speed_names[ui->game_speed_setting]);
-
-    // 조작 방식 옵션
-    const char* control_names[] = {"화살표+WASD", "화살표만", "WASD만"};
-    snprintf(ui->options[1].text, sizeof(ui->options[1].text),
-             "🎮 조작 방식: %s", control_names[ui->controls_scheme]);
-
-    strcpy(ui->options[2].text, "⬅️ 메인 메뉴로 돌아가기");
-    
-    for (int i = 0; i < ui->num_options; i++) {
-        ui->options[i].value = i;
-    }
 }

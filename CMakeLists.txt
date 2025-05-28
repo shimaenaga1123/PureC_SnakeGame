@@ -72,19 +72,12 @@ set(UI_SOURCES
     src/ui/ui.c
 )
 
-# 구성 시스템 소스 파일들
-set(CONFIG_SOURCES
-    src/config/config.h
-    src/config/config.c
-)
-
 # 전체 소스 파일 목록
 set(ALL_SOURCES
     src/main.c
     ${PLATFORM_SOURCES}
     ${GAME_SOURCES}
     ${UI_SOURCES}
-    ${CONFIG_SOURCES}
 )
 
 # 실행 파일 생성
@@ -124,7 +117,6 @@ elseif(EMSCRIPTEN)
         "-sALLOW_MEMORY_GROWTH=1"
         "-sINITIAL_MEMORY=33554432"
         "-sUSE_SDL=2"
-        "--preload-file=${CMAKE_SOURCE_DIR}/config@/config"
         "-sENVIRONMENT=web,worker"
         "-sOFFSCREEN_FRAMEBUFFER=1"
         "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"

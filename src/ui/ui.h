@@ -2,7 +2,7 @@
  * @file ui.h
  * @brief 사용자 인터페이스 시스템 헤더 파일
  * 
- * 게임의 메뉴 시스템, 설정 화면, 게임 오버 화면 등
+ * 게임의 메뉴 시스템, 게임 오버 화면 등
  * 모든 UI 관련 기능을 정의합니다.
  */
 
@@ -20,8 +20,7 @@ typedef enum {
     UI_STATE_GAME_MODE_SELECT,     // 게임 모드 선택
     UI_STATE_AI_DIFFICULTY_SELECT, // AI 난이도 선택
     UI_STATE_PLAYING,              // 게임 중
-    UI_STATE_GAME_OVER,            // 게임 종료
-    UI_STATE_SETTINGS              // 설정 메뉴
+    UI_STATE_GAME_OVER             // 게임 종료
 } ui_state_t;
 
 /**
@@ -47,16 +46,7 @@ typedef struct {
     
     // 게임 설정
     int game_speed_setting;        // 게임 속도 설정 (0=느림, 1=보통, 2=빠름)
-    int game_difficulty;           // 게임 난이도 (0=쉬움, 1=보통, 2=어려움)
-    bool show_grid;                // 격자 표시 여부
-    bool show_fps;                 // FPS 표시 여부
-    
-    // 게임플레이 설정
-    
-    // 게임플레이 설정
-    bool auto_pause;               // 자동 일시정지 여부
-    bool screen_shake;             // 화면 흔들림 효과
-    int controls_scheme;           // 조작 방식 (0=화살표+WASD, 1=화살표만, 2=WASD만)
+    int ai_personality;            // AI 특성 설정 (0=균형, 1=공격적, 2=방어적, 3=신중, 4=무모)
 } ui_context_t;
 
 // 함수 선언
@@ -69,7 +59,6 @@ void ui_set_state(ui_context_t* ui, ui_state_t state);
 void ui_show_main_menu(ui_context_t* ui);
 void ui_show_game_mode_select(ui_context_t* ui);
 void ui_show_ai_difficulty_select(ui_context_t* ui);
-void ui_show_settings(ui_context_t* ui);
 void ui_show_game_over(ui_context_t* ui, game_state_t* game);
 
 #endif // UI_H

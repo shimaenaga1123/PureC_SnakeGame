@@ -1,6 +1,5 @@
 #include "ai.h"
 #include "game.h"
-#include "../config/config.h"
 #include <stdlib.h>
 #include <limits.h>
 
@@ -161,12 +160,11 @@ static int evaluate_position_safety(game_state_t* game, position_t pos, int dept
 /**
  * @brief 영역 제어 점수를 계산합니다 (공격적 AI용)
  * 
- * @param game 게임 상태 포인터
  * @param pos 평가할 위치
  * @param opponent_pos 상대방 위치
  * @return 영역 제어 점수
  */
-static int evaluate_territorial_control(game_state_t* game, position_t pos, position_t opponent_pos) {
+static int evaluate_territorial_control(position_t pos, position_t opponent_pos) {
     if (opponent_pos.x == -1 || opponent_pos.y == -1) return 0;
     
     int control_score = 0;
@@ -191,9 +189,10 @@ static int evaluate_territorial_control(game_state_t* game, position_t pos, posi
  * 
  * @param game 게임 상태 포인터
  * @param snake_id 뱀 ID
+ * @param ai_personality AI 특성 (0=균형, 1=공격적, 2=방어적, 3=신중, 4=무모)
  * @return 최적의 이동 방향
  */
-direction_t ai_get_best_move(game_state_t* game, int snake_id) {
+direction_t ai_get_best_move(game_state_t* game, int snake_id, int ai_personality) {
     snake_t* snake = &game->players[snake_id];
     if (!snake->alive) return snake->direction;
     
@@ -214,12 +213,8 @@ direction_t ai_get_best_move(game_state_t* game, int snake_id) {
             break;
     }
     
-    // 설정에서 AI 성향 가져오기 (설정 시스템이 있을 때)
-    game_config_t config;
-    config_set_defaults(&config);
-    config_load(&config);
-    
-    ai_personality_t personality = config.ai_personality;
+    // 전달받은 AI 특성 사용 (0=균형, 1=공격적, 2=방어적, 3=신중, 4=무모)
+    int personality = ai_personality;
     ai_personality_modifiers_t personality_mod = personality_modifiers[personality];
     
     // 성향에 따른 매개변수 보정
@@ -288,12 +283,12 @@ direction_t ai_get_best_move(game_state_t* game, int snake_id) {
         
         // 3. 영역 제어 점수 (성향에 따라)
         if (opponent_pos.x >= 0 && opponent_pos.y >= 0) {
-            int territorial_score = evaluate_territorial_control(game, next_pos, opponent_pos);
+            int territorial_score = evaluate_territorial_control(next_pos, opponent_pos);
             
-            if (personality == AI_PERSONALITY_AGGRESSIVE || personality == AI_PERSONALITY_RECKLESS) {
+            if (personality == 1 || personality == 4) { // 공격적 || 무모한
                 // 공격적/무모한 AI는 상대방에게 접근
                 score += territorial_score * (int)(params.aggression * 5);
-            } else if (personality == AI_PERSONALITY_DEFENSIVE || personality == AI_PERSONALITY_CAUTIOUS) {
+            } else if (personality == 2 || personality == 3) { // 방어적 || 신중한
                 // 방어적/신중한 AI는 상대방을 회피
                 score -= territorial_score * (int)((1.0f - params.risk_tolerance) * 3);
             }
@@ -317,10 +312,10 @@ direction_t ai_get_best_move(game_state_t* game, int snake_id) {
         wall_distance += (GAME_WIDTH - 1 - next_pos.x); // 오른쪽 벽까지의 거리
         wall_distance += (GAME_HEIGHT - 1 - next_pos.y); // 아래쪽 벽까지의 거리
         
-        if (personality == AI_PERSONALITY_CAUTIOUS) {
+        if (personality == 3) { // 신중한
             // 신중한 AI는 벽을 더 많이 회피
             score += wall_distance * 3;
-        } else if (personality == AI_PERSONALITY_RECKLESS) {
+        } else if (personality == 4) { // 무모한
             // 무모한 AI는 벽을 덜 회피
             score += wall_distance;
         } else {
@@ -340,14 +335,15 @@ direction_t ai_get_best_move(game_state_t* game, int snake_id) {
  * @brief 모든 AI 플레이어들을 업데이트합니다
  * 
  * @param game 게임 상태 포인터
+ * @param ai_personality AI 특성 (0=균형, 1=공격적, 2=방어적, 3=신중, 4=무모)
  */
-void ai_update_players(game_state_t* game) {
+void ai_update_players(game_state_t* game, int ai_personality) {
     for (int i = 0; i < game->num_players; i++) {
         snake_t* snake = &game->players[i];
         
         // AI 플레이어만 업데이트 (인간 플레이어 제외)
         if (snake->alive && snake->type != PLAYER_HUMAN) {
-            direction_t best_move = ai_get_best_move(game, i);
+            direction_t best_move = ai_get_best_move(game, i, ai_personality);
             snake->next_direction = best_move;
         }
     }
