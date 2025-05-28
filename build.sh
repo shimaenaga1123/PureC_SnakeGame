@@ -93,7 +93,7 @@ if [[ "${PLATFORM}" == "web" ]]; then
     fi
 
     print_status "Emscripten 버전: $(emcc --version | head -n1)"
-    print_status "ASYNCIFY 및 pthread 지원으로 빌드합니다..."
+    print_status "ASYNCIFY 지원으로 빌드합니다 (스레드 사용 안함)..."
 
     emcmake cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
     

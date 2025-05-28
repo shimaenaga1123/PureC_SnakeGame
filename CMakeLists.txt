@@ -104,16 +104,18 @@ elseif(EMSCRIPTEN)
     set_target_properties(snake PROPERTIES
         SUFFIX ".html"
     )
-    # 컴파일 옵션 추가
+    # 컴파일 옵션 추가 (스레드 사용 안함)
     target_compile_options(snake PRIVATE
         "-sASYNCIFY=1"
-        "-sUSE_PTHREADS=1"
+        # WebAssembly 빌드에서 스레드 비활성화
+        # "-sUSE_PTHREADS=1"
     )
     target_link_options(snake PRIVATE
-        "-sUSE_PTHREADS=1"
-        "-sPTHREAD_POOL_SIZE=4"
-        "-sWASM_WORKERS=1"
-        "-sSHARED_MEMORY=1"
+        # WebAssembly 빌드에서 스레드 비활성화
+        # "-sUSE_PTHREADS=1"
+        # "-sPTHREAD_POOL_SIZE=4"
+        # "-sWASM_WORKERS=1"
+        # "-sSHARED_MEMORY=1"
         "-sASYNCIFY=1"
         "-sASYNCIFY_STACK_SIZE=32768"
         "-sASYNCIFY_IGNORE_INDIRECT=1"

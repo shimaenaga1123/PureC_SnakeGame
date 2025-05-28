@@ -94,28 +94,59 @@ void start_game(game_mode_t mode) {
     g_app.last_update_time = platform_get_time_ms();
     g_app.last_ai_update_time = g_app.last_update_time;
     
+#ifdef PLATFORM_WEB
+    // WebAssembly 빌드에서는 스레드를 사용하지 않고 메인 루프에서 처리
+#else
     // 게임 스레드 생성
     thread_handle_t game_thread_handle = platform_create_thread(game_thread, &g_app);
-    
+#endif
+
     // 입력 처리 루프
     while (g_app.running && g_app.in_game) {
         game_key_t key = platform_get_key_pressed();
-        
+
         // ESC 키로 게임 종료
         if (key == KEY_ESC) {
             g_app.in_game = false;
             ui_set_state(&g_app.ui, UI_STATE_MAIN_MENU);
             break;
         }
-        
+
         // 사용자 입력 처리 (플레이어 0만)
         game_handle_input(&g_app.game, 0, key);
-        
+
+#ifdef PLATFORM_WEB
+        // WebAssembly 빌드에서는 이 곳에서 게임 루프 처리
+        uint64_t current_time = platform_get_time_ms();
+
+        // AI 플레이어 업데이트 - 100ms마다 실행
+        if (current_time - g_app.last_ai_update_time >= 100) {
+            ai_update_players(&g_app.game);
+            g_app.last_ai_update_time = current_time;
+        }
+
+        // 게임 상태 업데이트 - 게임 속도에 따라 실행
+        if (current_time - g_app.last_update_time >= (uint64_t)g_app.game.game_speed) {
+            if (!game_update(&g_app.game)) {
+                g_app.in_game = false;
+                ui_set_state(&g_app.ui, UI_STATE_GAME_OVER);
+                ui_show_game_over(&g_app.ui, &g_app.game);
+                break;
+            }
+            g_app.last_update_time = current_time;
+        }
+
+        // 게임 렌더링
+        game_render(&g_app.game);
+#endif
+
         platform_sleep(16);
     }
-    
+
+#ifndef PLATFORM_WEB
     // 게임 스레드가 끝날 때까지 대기
     platform_join_thread(game_thread_handle);
+#endif
     game_cleanup(&g_app.game);
 }
 
