@@ -603,28 +603,12 @@ void ui_show_settings(ui_context_t* ui) {
     snprintf(ui->options[0].text, sizeof(ui->options[0].text), 
              "🏃 게임 속도: %s", speed_names[ui->game_speed_setting]);
 
-    // 격자 표시 옵션
-    snprintf(ui->options[1].text, sizeof(ui->options[1].text), 
-             "📋 격자 표시: %s", ui->show_grid ? "켜짐" : "꺼짐");
-
-    // FPS 표시 옵션
-    snprintf(ui->options[2].text, sizeof(ui->options[2].text), 
-             "📊 FPS 표시: %s", ui->show_fps ? "켜짐" : "꺼짐");
-
-    // 자동 일시정지 옵션
-    snprintf(ui->options[3].text, sizeof(ui->options[3].text), 
-             "⏸️ 자동 일시정지: %s", ui->auto_pause ? "켜짐" : "꺼짐");
-
-    // 화면 흔들림 옵션
-    snprintf(ui->options[4].text, sizeof(ui->options[4].text), 
-             "📳 화면 흔들림: %s", ui->screen_shake ? "켜짐" : "꺼짐");
-
     // 조작 방식 옵션
     const char* control_names[] = {"화살표+WASD", "화살표만", "WASD만"};
-    snprintf(ui->options[5].text, sizeof(ui->options[5].text), 
+    snprintf(ui->options[1].text, sizeof(ui->options[1].text),
              "🎮 조작 방식: %s", control_names[ui->controls_scheme]);
 
-    strcpy(ui->options[6].text, "⬅️ 메인 메뉴로 돌아가기");
+    strcpy(ui->options[2].text, "⬅️ 메인 메뉴로 돌아가기");
     
     for (int i = 0; i < ui->num_options; i++) {
         ui->options[i].value = i;
