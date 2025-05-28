@@ -109,6 +109,9 @@ void ui_render(ui_context_t* ui) {
     platform_print_at(20, 29, "화살표 키로 이동, Enter로 선택, ESC로 뒤로가기");
     
     platform_reset_color();
+    
+    // Windows에서 더블 버퍼링된 화면을 실제 콘솔에 출력
+    platform_present_buffer();
 }
 
 /**

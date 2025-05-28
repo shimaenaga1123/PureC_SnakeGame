@@ -746,6 +746,9 @@ void game_render(game_state_t* game) {
     }
     
     platform_reset_color();
+    
+    // Windows에서 더블 버퍼링된 화면을 실제 콘솔에 출력
+    platform_present_buffer();
 }
 
 /**

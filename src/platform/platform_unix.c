@@ -225,4 +225,10 @@ void platform_seed_random(uint32_t seed) {
     srand(seed);
 }
 
+// Windows 전용 더블 버퍼링 함수 (Unix에서는 빈 구현)
+void platform_present_buffer(void) {
+    // Unix/Linux에서는 터미널이 자체적으로 버퍼링을 처리함
+    fflush(stdout);
+}
+
 #endif // PLATFORM_MACOS || PLATFORM_UNIX

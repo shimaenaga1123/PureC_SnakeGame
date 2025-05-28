@@ -97,6 +97,7 @@ void platform_print_at(int x, int y, const char* text);
 void platform_hide_cursor(void);
 void platform_show_cursor(void);
 void platform_set_console_size(int width, int height);
+void platform_present_buffer(void);  // 더블 버퍼링 출력 함수 (Windows 전용)
 
 // 입력 처리 함수들
 game_key_t platform_get_key_pressed(void);

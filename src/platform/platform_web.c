@@ -189,4 +189,9 @@ void platform_seed_random(uint32_t seed) {
     srand(seed);
 }
 
+// Web 플랫폼용 더블 버퍼링 함수 (빈 구현)
+void platform_present_buffer(void) {
+    // Web에서는 DOM 업데이트가 자동으로 처리됨
+}
+
 #endif // PLATFORM_WEB
