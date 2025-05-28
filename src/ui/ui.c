@@ -3,6 +3,15 @@
 #include <string.h>
 #include <stdio.h>
 
+// UI 상태 추적을 위한 정적 변수들
+static ui_state_t g_previous_ui_state = UI_STATE_MAIN_MENU;
+static int g_previous_selected_option = -1;
+static char g_previous_title[128] = {0};
+static char g_previous_message[512] = {0};
+static menu_option_t g_previous_options[10];
+static int g_previous_num_options = 0;
+static bool g_ui_initialized = false;
+
 // 정적 함수 선언
 static void ui_handle_main_menu_selection(ui_context_t* ui);
 static void ui_handle_ai_difficulty_selection(ui_context_t* ui);
@@ -32,6 +41,15 @@ void ui_init(ui_context_t* ui) {
     ui->screen_shake = true;
     ui->controls_scheme = 0;       // 화살표+WASD
     
+    // UI 추적 변수 초기화
+    g_ui_initialized = false;
+    g_previous_ui_state = UI_STATE_MAIN_MENU;
+    g_previous_selected_option = -1;
+    memset(g_previous_title, 0, sizeof(g_previous_title));
+    memset(g_previous_message, 0, sizeof(g_previous_message));
+    memset(g_previous_options, 0, sizeof(g_previous_options));
+    g_previous_num_options = 0;
+    
     ui_show_main_menu(ui);
 }
 
@@ -42,6 +60,7 @@ void ui_init(ui_context_t* ui) {
  */
 void ui_cleanup(ui_context_t* ui) {
     (void)ui; // 정리할 리소스가 없음
+    g_ui_initialized = false;
 }
 
 /**
@@ -55,59 +74,161 @@ void ui_update(ui_context_t* ui) {
 }
 
 /**
- * @brief UI를 화면에 렌더링합니다
- * 
+ * @brief 문자열이 변경되었는지 확인하는 헬퍼 함수
+ */
+static bool string_changed(const char* current, const char* previous) {
+    return strcmp(current, previous) != 0;
+}
+
+/**
+ * @brief 옵션 배열이 변경되었는지 확인하는 헬퍼 함수
+ */
+static bool options_changed(const menu_option_t* current, const menu_option_t* previous, int current_num, int previous_num) {
+    if (current_num != previous_num) return true;
+    
+    for (int i = 0; i < current_num; i++) {
+        if (strcmp(current[i].text, previous[i].text) != 0 || current[i].value != previous[i].value) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * @brief 화면의 특정 영역을 지우는 헬퍼 함수
+ */
+static void clear_area(int start_x, int start_y, int width, int height) {
+    platform_set_color(COLOR_BLACK);
+    for (int y = start_y; y < start_y + height; y++) {
+        for (int x = start_x; x < start_x + width; x++) {
+            platform_print_at(x, y, " ");
+        }
+    }
+}
+
+/**
+ * @brief 전체 화면을 완전히 정리하는 함수
+ */
+static void clear_full_screen(void) {
+    platform_clear_screen();
+
+    // 추가로 전체 화면을 공백으로 채워서 확실하게 정리
+    platform_set_color(COLOR_BLACK);
+    for (int y = 0; y < 50; y++) {
+        for (int x = 0; x < 120; x++) {
+            platform_print_at(x, y, " ");
+        }
+    }
+}
+
+/**
+ * @brief UI를 화면에 렌더링합니다 (차분 렌더링 적용)
+ *
  * @param ui UI 컨텍스트 포인터
  */
 void ui_render(ui_context_t* ui) {
     if (!ui) return;
-    
-    platform_clear_screen();
-    platform_hide_cursor();
-    
-    // 제목 그리기
-    platform_set_color(COLOR_BRIGHT_GREEN);
-    platform_print_at(30, 2, ui->title);
-    
-    // 메뉴 옵션들 그리기
-    for (int i = 0; i < ui->num_options; i++) {
-        int y = 8 + i * 2;
-        
-        // 선택된 옵션에 화살표 표시
-        if (i == ui->selected_option) {
-            platform_set_color(COLOR_BRIGHT_YELLOW);
-            platform_print_at(25, y, "> ");
-        } else {
-            platform_print_at(25, y, "  ");
-        }
-        
-        // 옵션 텍스트 색상 설정
-        platform_set_color(i == ui->selected_option ? COLOR_BRIGHT_WHITE : COLOR_WHITE);
-        platform_print_at(27, y, ui->options[i].text);
+
+    bool force_full_redraw = false;
+
+    // 첫 렌더링이거나 UI 상태가 변경된 경우 전체 다시 그리기
+    if (!g_ui_initialized || ui->current_state != g_previous_ui_state) {
+        clear_full_screen();  // 완전한 화면 정리
+        platform_hide_cursor();
+        force_full_redraw = true;
+        g_ui_initialized = true;
+        g_previous_ui_state = ui->current_state;
+
+        // 상태 변경시 이전 추적 데이터 모두 리셋
+        memset(g_previous_title, 0, sizeof(g_previous_title));
+        memset(g_previous_message, 0, sizeof(g_previous_message));
+        memset(g_previous_options, 0, sizeof(g_previous_options));
+        g_previous_num_options = 0;
+        g_previous_selected_option = -1;
     }
-    
-    // 메시지 그리기 (여러 줄 지원)
-    if (strlen(ui->message) > 0) {
+
+    // 제목 업데이트 (변경된 경우만)
+    if (force_full_redraw || string_changed(ui->title, g_previous_title)) {
+        // 제목을 더 잘 보이는 색상으로 설정
         platform_set_color(COLOR_BRIGHT_CYAN);
-        
-        char message_copy[1024];
-        strncpy(message_copy, ui->message, sizeof(message_copy) - 1);
-        message_copy[sizeof(message_copy) - 1] = '\0';
-        
-        char* line = strtok(message_copy, "\n");
-        int line_y = 20;
-        
-        while (line != NULL && line_y < 28) {
-            platform_print_at(10, line_y, line);
-            line = strtok(NULL, "\n");
-            line_y++;
+
+        // 이전 제목 영역 지우기 (필요한 경우)
+        if (!force_full_redraw) {
+            clear_area(15, 2, 70, 1);
         }
+
+        platform_print_at(20, 2, ui->title);
+        strcpy(g_previous_title, ui->title);
     }
-    
-    // 조작 방법 안내
-    platform_set_color(COLOR_BRIGHT_BLACK);
-    platform_print_at(20, 29, "화살표 키로 이동, Enter로 선택, ESC로 뒤로가기");
-    
+
+    // 메뉴 옵션들 업데이트 (변경된 경우만)
+    bool options_need_update = force_full_redraw ||
+                              options_changed(ui->options, g_previous_options, ui->num_options, g_previous_num_options) ||
+                              ui->selected_option != g_previous_selected_option;
+
+    if (options_need_update) {
+        // 이전 옵션 영역 지우기 (필요한 경우)
+        if (!force_full_redraw) {
+            int max_options = (g_previous_num_options > ui->num_options) ? g_previous_num_options : ui->num_options;
+            clear_area(25, 8, 60, max_options * 2);
+        }
+
+        // 새 옵션들 그리기
+        for (int i = 0; i < ui->num_options; i++) {
+            int y = 8 + i * 2;
+
+            // 선택된 옵션에 화살표 표시
+            if (i == ui->selected_option) {
+                platform_set_color(COLOR_BRIGHT_YELLOW);
+                platform_print_at(25, y, "> ");
+            } else {
+                platform_print_at(25, y, "  ");
+            }
+
+            // 옵션 텍스트 색상 설정
+            platform_set_color(i == ui->selected_option ? COLOR_BRIGHT_WHITE : COLOR_WHITE);
+            platform_print_at(27, y, ui->options[i].text);
+        }
+
+        // 현재 옵션 상태를 이전 상태로 저장
+        memcpy(g_previous_options, ui->options, sizeof(menu_option_t) * ui->num_options);
+        g_previous_num_options = ui->num_options;
+        g_previous_selected_option = ui->selected_option;
+    }
+
+    // 메시지 업데이트 (변경된 경우만)
+    if (force_full_redraw || string_changed(ui->message, g_previous_message)) {
+        // 이전 메시지 영역 지우기 (필요한 경우)
+        if (!force_full_redraw) {
+            clear_area(10, 20, 80, 8);
+        }
+
+        if (strlen(ui->message) > 0) {
+            platform_set_color(COLOR_BRIGHT_CYAN);
+
+            char message_copy[1024];
+            strncpy(message_copy, ui->message, sizeof(message_copy) - 1);
+            message_copy[sizeof(message_copy) - 1] = '\0';
+
+            char* line = strtok(message_copy, "\n");
+            int line_y = 20;
+
+            while (line != NULL && line_y < 28) {
+                platform_print_at(10, line_y, line);
+                line = strtok(NULL, "\n");
+                line_y++;
+            }
+        }
+
+        strcpy(g_previous_message, ui->message);
+    }
+
+    // 조작 방법 안내 (한 번만 출력)
+    if (force_full_redraw) {
+        platform_set_color(COLOR_BRIGHT_BLACK);
+        platform_print_at(20, 29, "화살표 키로 이동, Enter로 선택, ESC로 뒤로가기");
+    }
+
     platform_reset_color();
     
     // Windows에서 더블 버퍼링된 화면을 실제 콘솔에 출력
@@ -143,11 +264,17 @@ void ui_handle_input(ui_context_t* ui, game_key_t key) {
             break;
             
         case KEY_LEFT:
-            // 왼쪽 키 처리
+            // 왼쪽 키 처리 (설정에서 값 변경)
+            if (ui->current_state == UI_STATE_SETTINGS) {
+                ui_handle_settings_selection(ui);
+            }
             break;
 
         case KEY_RIGHT:
-            // 오른쪽 키 처리
+            // 오른쪽 키 처리 (설정에서 값 변경)
+            if (ui->current_state == UI_STATE_SETTINGS) {
+                ui_handle_settings_selection(ui);
+            }
             break;
             
         case KEY_ENTER:
@@ -282,7 +409,6 @@ static void ui_handle_settings_selection(ui_context_t* ui) {
 }
 
 
-
 /**
  * @brief UI 상태를 변경합니다
  * 
@@ -295,6 +421,20 @@ void ui_set_state(ui_context_t* ui, ui_state_t state) {
     ui->previous_state = ui->current_state;
     ui->current_state = state;
     ui->selected_option = 0;
+
+    // 상태 변경시 화면을 완전히 정리하기 위해 초기화 플래그 리셋
+    g_ui_initialized = false;
+    g_previous_ui_state = (ui_state_t)-1; // 강제 전체 다시 그리기
+    memset(g_previous_title, 0, sizeof(g_previous_title));
+    memset(g_previous_message, 0, sizeof(g_previous_message));
+    memset(g_previous_options, 0, sizeof(g_previous_options));
+    g_previous_num_options = 0;
+    g_previous_selected_option = -1;
+
+    // 특히 게임 오버 상태로 전환시 화면 완전 정리
+    if (state == UI_STATE_GAME_OVER) {
+        clear_full_screen();
+    }
     
     // 상태에 따른 화면 설정
     switch (state) {
@@ -353,7 +493,7 @@ void ui_show_ai_difficulty_select(ui_context_t* ui) {
     strcpy(ui->options[0].text, "😊 쉬움 - AI 초보자");
     strcpy(ui->options[1].text, "😐 보통 - AI 중급자");
     strcpy(ui->options[2].text, "😰 어려움 - AI 고수");
-    strcpy(ui->options[3].text, "⬅️  뒤로가기");
+    strcpy(ui->options[3].text, "⬅️ 뒤로가기");
     
     ui->options[0].value = GAME_MODE_VS_AI_EASY;
     ui->options[1].value = GAME_MODE_VS_AI_MEDIUM;
@@ -410,7 +550,7 @@ void ui_show_game_over(ui_context_t* ui, game_state_t* game) {
                 "🏆 최종 점수: %d점\n"
                 "%s 최종 등급: %s\n"
                 "🐍 뱀 길이: %d칸\n"
-                "⏱️  게임 시간: %d:%02d\n"
+                "⏱️ 게임 시간: %d:%02d\n"
                 "🍎 먹은 사과: %d개\n"
                 "🧱 생성된 장애물: %d개\n\n"
                 "훌륭한 플레이였습니다!", 
@@ -453,7 +593,7 @@ void ui_show_game_over(ui_context_t* ui, game_state_t* game) {
 void ui_show_settings(ui_context_t* ui) {
     if (!ui) return;
     
-    strcpy(ui->title, "⚙️ 게임 설정");
+    strcpy(ui->title, "⚙️게임 설정");
     strcpy(ui->message, "");
     
     ui->num_options = 7;
@@ -473,7 +613,7 @@ void ui_show_settings(ui_context_t* ui) {
 
     // 자동 일시정지 옵션
     snprintf(ui->options[3].text, sizeof(ui->options[3].text), 
-             "⏸️  자동 일시정지: %s", ui->auto_pause ? "켜짐" : "꺼짐");
+             "⏸️ 자동 일시정지: %s", ui->auto_pause ? "켜짐" : "꺼짐");
 
     // 화면 흔들림 옵션
     snprintf(ui->options[4].text, sizeof(ui->options[4].text), 
@@ -484,10 +624,9 @@ void ui_show_settings(ui_context_t* ui) {
     snprintf(ui->options[5].text, sizeof(ui->options[5].text), 
              "🎮 조작 방식: %s", control_names[ui->controls_scheme]);
 
-    strcpy(ui->options[6].text, "⬅️  메인 메뉴로 돌아가기");
+    strcpy(ui->options[6].text, "⬅️ 메인 메뉴로 돌아가기");
     
     for (int i = 0; i < ui->num_options; i++) {
         ui->options[i].value = i;
     }
 }
-

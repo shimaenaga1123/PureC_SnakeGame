@@ -7,14 +7,20 @@
 #include <stdlib.h>
 #include <time.h>
 #include <conio.h>
+#include <io.h>
+#include <fcntl.h>
 
 static HANDLE g_console_handle = NULL;
 static HANDLE g_input_handle = NULL;
 static HANDLE g_back_buffer = NULL;  // 더블 버퍼링용 백 버퍼
-static CHAR_INFO* g_screen_buffer = NULL;  // 화면 버퍼
 static COORD g_buffer_size = {0, 0};
 static SMALL_RECT g_write_region = {0, 0, 0, 0};
 static bool g_double_buffering_enabled = false;
+
+// 화면 변경 추적을 위한 버퍼
+static char** g_screen_text_buffer = NULL;
+static WORD* g_screen_attr_buffer = NULL;
+static bool g_screen_initialized = false;
 
 bool platform_init(void) {
     g_console_handle = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -23,49 +29,43 @@ bool platform_init(void) {
     if (g_console_handle == INVALID_HANDLE_VALUE || g_input_handle == INVALID_HANDLE_VALUE) {
         return false;
     }
-    
-    // UTF-8 코드 페이지 설정
+
+    // UTF-8 출력을 위한 설정
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
-    
-    // 콘솔 모드 설정 (깜빡임 최소화)
+
+    // 콘솔 모드 설정 (가상 터미널 처리 활성화)
     DWORD console_mode;
-    GetConsoleMode(g_console_handle, &console_mode);
-    console_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(g_console_handle, console_mode);
-    
-    // 더블 버퍼링 초기화
+    if (GetConsoleMode(g_console_handle, &console_mode)) {
+        console_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        SetConsoleMode(g_console_handle, console_mode);
+    }
+
+    // 화면 버퍼 크기 가져오기
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     if (GetConsoleScreenBufferInfo(g_console_handle, &csbi)) {
         g_buffer_size.X = csbi.dwSize.X;
         g_buffer_size.Y = csbi.dwSize.Y;
-        g_write_region.Left = 0;
-        g_write_region.Top = 0;
-        g_write_region.Right = g_buffer_size.X - 1;
-        g_write_region.Bottom = g_buffer_size.Y - 1;
-        
-        // 백 버퍼 생성
-        g_back_buffer = CreateConsoleScreenBuffer(
-            GENERIC_READ | GENERIC_WRITE,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            NULL,
-            CONSOLE_TEXTMODE_BUFFER,
-            NULL
-        );
-        
-        if (g_back_buffer != INVALID_HANDLE_VALUE) {
-            // 화면 버퍼 메모리 할당
-            size_t buffer_size = g_buffer_size.X * g_buffer_size.Y * sizeof(CHAR_INFO);
-            g_screen_buffer = (CHAR_INFO*)malloc(buffer_size);
-            
-            if (g_screen_buffer) {
-                // 버퍼 초기화
-                for (int i = 0; i < g_buffer_size.X * g_buffer_size.Y; i++) {
-                    g_screen_buffer[i].Char.UnicodeChar = L' ';
-                    g_screen_buffer[i].Attributes = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+
+        // 텍스트 추적 버퍼 할당
+        g_screen_text_buffer = (char**)malloc(g_buffer_size.Y * sizeof(char*));
+        g_screen_attr_buffer = (WORD*)malloc(g_buffer_size.X * g_buffer_size.Y * sizeof(WORD));
+
+        if (g_screen_text_buffer && g_screen_attr_buffer) {
+            for (int y = 0; y < g_buffer_size.Y; y++) {
+                g_screen_text_buffer[y] = (char*)malloc(g_buffer_size.X * 4 + 1); // UTF-8용 충분한 공간
+                if (g_screen_text_buffer[y]) {
+                    memset(g_screen_text_buffer[y], 0, g_buffer_size.X * 4 + 1);
                 }
-                g_double_buffering_enabled = true;
             }
+
+            // 속성 버퍼 초기화
+            WORD default_attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+            for (int i = 0; i < g_buffer_size.X * g_buffer_size.Y; i++) {
+                g_screen_attr_buffer[i] = default_attr;
+            }
+
+            g_screen_initialized = true;
         }
     }
     
@@ -76,101 +76,132 @@ bool platform_init(void) {
 void platform_cleanup(void) {
     platform_reset_color();
     platform_show_cursor();
-    
-    // 더블 버퍼링 리소스 정리
-    if (g_screen_buffer) {
-        free(g_screen_buffer);
-        g_screen_buffer = NULL;
+
+    // 화면 추적 버퍼 해제
+    if (g_screen_text_buffer) {
+        for (int y = 0; y < g_buffer_size.Y; y++) {
+            if (g_screen_text_buffer[y]) {
+                free(g_screen_text_buffer[y]);
+            }
+        }
+        free(g_screen_text_buffer);
+        g_screen_text_buffer = NULL;
     }
-    
-    if (g_back_buffer != INVALID_HANDLE_VALUE) {
-        CloseHandle(g_back_buffer);
-        g_back_buffer = INVALID_HANDLE_VALUE;
+
+    if (g_screen_attr_buffer) {
+        free(g_screen_attr_buffer);
+        g_screen_attr_buffer = NULL;
     }
-    
-    g_double_buffering_enabled = false;
+
+    g_screen_initialized = false;
 }
 
 void platform_clear_screen(void) {
-    if (g_double_buffering_enabled && g_screen_buffer) {
-        // 더블 버퍼링 사용 시 백 버퍼만 클리어
-        for (int i = 0; i < g_buffer_size.X * g_buffer_size.Y; i++) {
-            g_screen_buffer[i].Char.UnicodeChar = L' ';
-            g_screen_buffer[i].Attributes = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+    if (g_screen_initialized) {
+        // 화면 추적 버퍼도 클리어
+        for (int y = 0; y < g_buffer_size.Y; y++) {
+            if (g_screen_text_buffer[y]) {
+                memset(g_screen_text_buffer[y], 0, g_buffer_size.X * 4 + 1);
+            }
         }
-    } else {
-        // 기존 방식 (fallback)
-        COORD coord = {0, 0};
-        DWORD written;
-        CONSOLE_SCREEN_BUFFER_INFO csbi;
-        
-        GetConsoleScreenBufferInfo(g_console_handle, &csbi);
-        DWORD size = csbi.dwSize.X * csbi.dwSize.Y;
-        
-        FillConsoleOutputCharacter(g_console_handle, ' ', size, coord, &written);
-        FillConsoleOutputAttribute(g_console_handle, csbi.wAttributes, size, coord, &written);
-        SetConsoleCursorPosition(g_console_handle, coord);
+
+        WORD default_attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+        for (int i = 0; i < g_buffer_size.X * g_buffer_size.Y; i++) {
+            g_screen_attr_buffer[i] = default_attr;
+        }
     }
+
+    // 한 번만 화면 클리어
+    printf("\033[2J\033[H");
+    fflush(stdout);
 }
 
 static COORD g_current_pos = {0, 0};
-static WORD g_current_attributes = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+static WORD g_current_attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
 
 void platform_goto_xy(int x, int y) {
     g_current_pos.X = (SHORT)x;
     g_current_pos.Y = (SHORT)y;
-    
-    if (!g_double_buffering_enabled) {
-        SetConsoleCursorPosition(g_console_handle, g_current_pos);
-    }
 }
 
 void platform_set_color(color_t color) {
-    g_current_attributes = (WORD)color;
-    
-    if (!g_double_buffering_enabled) {
-        SetConsoleTextAttribute(g_console_handle, (WORD)color);
-    }
+    g_current_attr = (WORD)color;
 }
 
 void platform_reset_color(void) {
-    g_current_attributes = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
-    
-    if (!g_double_buffering_enabled) {
-        SetConsoleTextAttribute(g_console_handle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
-    }
+    g_current_attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+    printf("\033[0m");
+    fflush(stdout);
 }
 
 void platform_print(const char* text) {
-    if (g_double_buffering_enabled && g_screen_buffer) {
-        // 더블 버퍼링 사용 시 백 버퍼에 직접 쓰기
-        int len = strlen(text);
-        for (int i = 0; i < len; i++) {
-            if (g_current_pos.X >= 0 && g_current_pos.X < g_buffer_size.X &&
-                g_current_pos.Y >= 0 && g_current_pos.Y < g_buffer_size.Y) {
-                
-                int index = g_current_pos.Y * g_buffer_size.X + g_current_pos.X;
-                
-                // UTF-8 문자 처리 개선
-                if ((unsigned char)text[i] >= 128) {
-                    // 유니코드 문자 처리 - 간단한 이모지 대체
-                    g_screen_buffer[index].Char.UnicodeChar = L'*';
-                } else {
-                    g_screen_buffer[index].Char.AsciiChar = text[i];
-                }
-                g_screen_buffer[index].Attributes = g_current_attributes;
-                
-                g_current_pos.X++;
-                if (g_current_pos.X >= g_buffer_size.X) {
-                    g_current_pos.X = 0;
-                    g_current_pos.Y++;
-                }
+    if (!text) return;
+
+    // 현재 위치가 유효한 범위 내인지 확인
+    if (g_current_pos.X < 0 || g_current_pos.X >= g_buffer_size.X ||
+        g_current_pos.Y < 0 || g_current_pos.Y >= g_buffer_size.Y) {
+        return;
+    }
+
+    if (g_screen_initialized && g_screen_text_buffer && g_screen_attr_buffer) {
+        // 현재 위치의 기존 내용과 비교
+        int buffer_index = g_current_pos.Y * g_buffer_size.X + g_current_pos.X;
+        bool content_changed = false;
+        bool attr_changed = false;
+
+        // 텍스트 변경 확인
+        char* current_line = g_screen_text_buffer[g_current_pos.Y];
+        int start_pos = g_current_pos.X * 4; // UTF-8을 위한 충분한 공간
+
+        if (strncmp(&current_line[start_pos], text, strlen(text)) != 0) {
+            content_changed = true;
+            // 새 텍스트 저장
+            strncpy(&current_line[start_pos], text, strlen(text));
+        }
+
+        // 속성 변경 확인
+        if (g_screen_attr_buffer[buffer_index] != g_current_attr) {
+            attr_changed = true;
+            g_screen_attr_buffer[buffer_index] = g_current_attr;
+        }
+
+        // 변경된 내용만 출력 (깜빡거림 최소화)
+        if (content_changed || attr_changed) {
+            printf("\033[%d;%dH", g_current_pos.Y + 1, g_current_pos.X + 1);
+
+            // 색상 설정
+            const char* color_codes[] = {
+                "\033[30m", "\033[34m", "\033[32m", "\033[36m",
+                "\033[31m", "\033[35m", "\033[33m", "\033[37m",
+                "\033[90m", "\033[94m", "\033[92m", "\033[96m",
+                "\033[91m", "\033[95m", "\033[93m", "\033[97m"
+            };
+
+            if (g_current_attr < 16) {
+                printf("%s", color_codes[g_current_attr]);
             }
+            printf("%s", text);
         }
     } else {
-        // 기존 방식 사용
+        // fallback: 직접 출력
+        printf("\033[%d;%dH", g_current_pos.Y + 1, g_current_pos.X + 1);
+
+        const char* color_codes[] = {
+            "\033[30m", "\033[34m", "\033[32m", "\033[36m",
+            "\033[31m", "\033[35m", "\033[33m", "\033[37m",
+            "\033[90m", "\033[94m", "\033[92m", "\033[96m",
+            "\033[91m", "\033[95m", "\033[93m", "\033[97m"
+        };
+
+        if (g_current_attr < 16) {
+            printf("%s", color_codes[g_current_attr]);
+        }
+
         printf("%s", text);
     }
+
+    // 커서 위치 업데이트
+    g_current_pos.X += strlen(text);
 }
 
 void platform_print_at(int x, int y, const char* text) {
@@ -178,39 +209,36 @@ void platform_print_at(int x, int y, const char* text) {
     platform_print(text);
 }
 
-// 더블 버퍼링된 화면을 실제 콘솔에 출력하는 함수
-void platform_present_buffer(void) {
-    if (g_double_buffering_enabled && g_screen_buffer) {
-        WriteConsoleOutput(
-            g_console_handle,
-            g_screen_buffer,
-            g_buffer_size,
-            (COORD){0, 0},
-            &g_write_region
-        );
-    }
-}
-
 void platform_hide_cursor(void) {
-    CONSOLE_CURSOR_INFO cursorInfo;
-    GetConsoleCursorInfo(g_console_handle, &cursorInfo);
-    cursorInfo.bVisible = FALSE;
-    SetConsoleCursorInfo(g_console_handle, &cursorInfo);
+    printf("\033[?25l");
+    fflush(stdout);
 }
 
 void platform_show_cursor(void) {
-    CONSOLE_CURSOR_INFO cursorInfo;
-    GetConsoleCursorInfo(g_console_handle, &cursorInfo);
-    cursorInfo.bVisible = TRUE;
-    SetConsoleCursorInfo(g_console_handle, &cursorInfo);
+    printf("\033[?25h");
+    fflush(stdout);
 }
 
 void platform_set_console_size(int width, int height) {
     COORD newBuf = {(SHORT)width, (SHORT)height};
     SetConsoleScreenBufferSize(g_console_handle, newBuf);
-    
+
     SMALL_RECT win = {0, 0, (SHORT)(width-1), (SHORT)(height-1)};
     SetConsoleWindowInfo(g_console_handle, TRUE, &win);
+}
+
+// 모든 변경사항을 한 번에 출력 (깜빡거림 방지)
+void platform_present_buffer(void) {
+    static bool first_present = true;
+
+    if (first_present) {
+        // 첫 번째 출력시에만 전체 화면 갱신
+        fflush(stdout);
+        first_present = false;
+    } else {
+        // 이후에는 버퍼링된 출력만 플러시
+        fflush(stdout);
+    }
 }
 
 game_key_t platform_get_key_pressed(void) {

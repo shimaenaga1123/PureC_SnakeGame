@@ -26,7 +26,7 @@ static app_state_t g_app;
 
 /**
  * @brief 게임 루프를 실행하는 스레드 함수
- * 
+ *
  * AI 업데이트, 게임 상태 업데이트, 렌더링을 처리합니다.
  * 
  * @param arg 애플리케이션 상태에 대한 포인터
@@ -48,6 +48,8 @@ void* game_thread(void* arg) {
         if (current_time - app->last_update_time >= (uint64_t)app->game.game_speed) {
             if (!game_update(&app->game)) {
                 app->in_game = false;
+                // 게임 오버 시 화면 완전 정리
+                platform_clear_screen();
                 ui_set_state(&app->ui, UI_STATE_GAME_OVER);
                 ui_show_game_over(&app->ui, &app->game);
             }
@@ -109,6 +111,8 @@ void start_game(game_mode_t mode) {
         if (key == KEY_ESC) {
             g_app.in_game = false;
             ui_set_state(&g_app.ui, UI_STATE_MAIN_MENU);
+            // 게임 종료 시 화면 완전 정리
+            platform_clear_screen();
             break;
         }
 
@@ -129,6 +133,8 @@ void start_game(game_mode_t mode) {
         if (current_time - g_app.last_update_time >= (uint64_t)g_app.game.game_speed) {
             if (!game_update(&g_app.game)) {
                 g_app.in_game = false;
+                // 게임 오버 시 화면 완전 정리
+                platform_clear_screen();
                 ui_set_state(&g_app.ui, UI_STATE_GAME_OVER);
                 ui_show_game_over(&g_app.ui, &g_app.game);
                 break;
@@ -147,6 +153,12 @@ void start_game(game_mode_t mode) {
     // 게임 스레드가 끝날 때까지 대기
     platform_join_thread(game_thread_handle);
 #endif
+
+    // 게임 종료 시 화면 완전 정리
+    if (!g_app.in_game) {
+        platform_clear_screen();
+    }
+
     game_cleanup(&g_app.game);
 }
 
